@@ -10,10 +10,7 @@ import java.io.Writer;
 import java.util.Arrays;
 import java.util.Collection;
 
-import org.junit.After;
-import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -58,14 +55,6 @@ public class ToStreamTest {
         mock_writer = new MockWriter();
         mock.m_writer = mock_writer;
     }
-
-    /**
-     * @throws java.lang.Exception
-     */
-    @After
-    public void tearDown() throws Exception {
-    }
-    
     
 
     @Test
@@ -82,10 +71,10 @@ public class ToStreamTest {
     @Test
     public void testCharactersSplitSurrogates() {
         try {
-            mock.characters(new char[] {HIGH}, 0, 1);
-            mock.characters(new char[] {LOW}, 0, 1);
+            mock.characters(new char[] {'a', HIGH}, 0, 2);
+            mock.characters(new char[] {LOW, 'b'}, 0, 2);
             mock.flushPending();
-            assertEquals("Output matched", representation, mock_writer.getOutput());
+            assertEquals("Output matched", "a"+representation+"b", mock_writer.getOutput());
         }
         catch (SAXException e) {
             fail(e.getMessage());
@@ -95,9 +84,9 @@ public class ToStreamTest {
     @Test
     public void testCharactersCompleteSurrogate() {
         try {
-            mock.characters(new char[] {HIGH, LOW}, 0, 2);
+            mock.characters(new char[] {'a', HIGH, LOW, 'b'}, 0, 4);
             mock.flushPending();
-            assertEquals("Output matched", representation, mock_writer.getOutput());
+            assertEquals("Output matched", "a"+representation+"b", mock_writer.getOutput());
         }
         catch (SAXException e) {
             fail(e.getMessage());
