@@ -1635,14 +1635,14 @@ abstract public class ToStream extends SerializerBase
                             }
                         }
                         else {
-                            throw new SAXException(String.format("Encounterd low UTF-16 surrogate without a high: %i", ch));
+                            throw new SAXException(String.format("Encountered low UTF-16 surrogate without a high: %c", ch));
                         }
                     }
                 	else {
                         // This is a fallback plan, we get here if the
                         // encoding doesn't contain ch and it's not part
                         // of a surrogate pair; therefore, it's invalid.
-                	    throw new SAXException(String.format("Invalid codepoint: %i", ch));
+                	    throw new SAXException(String.format("Invalid codepoint: %c", ch));
                     }
                 }
             }
