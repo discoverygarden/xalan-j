@@ -1610,7 +1610,8 @@ abstract public class ToStream extends SerializerBase
                         }
                         else {
                             // We've hit the end of the buffer with only a high surrogate; an incomplete character.
-                            // Stash it to deal with later.
+                            // Dump things out and stash it to deal with later.
+                            writeOutCleanChars(chars, i, lastDirtyCharProcessed);
                             writer = new SurrogateWriter(this, ch);
                             lastDirtyCharProcessed = i;
                         }
@@ -1619,7 +1620,13 @@ abstract public class ToStream extends SerializerBase
                         if (writer instanceof SurrogateWriter) {
                             final SurrogateWriter sw = ((SurrogateWriter) writer);
                             final char high = sw.getUpper();
-                            writer = sw.restore();
+                            
+                            // XXX: Complains about a resource leak if we don't close it via the same variable.
+                            final Writer to_restore = sw.restore();
+                            writer.close();
+                            
+                            writer = to_restore;
+                            
                             writeOutCleanChars(chars, i, lastDirtyCharProcessed);
                             
                             if (m_encodingInfo.isInEncoding(high, ch)) {
@@ -3652,6 +3659,7 @@ abstract public class ToStream extends SerializerBase
         protected Writer main;
         protected ToStream parent;
         protected char high;
+        protected boolean closeable = false;
         
         public SurrogateWriter(ToStream p, char high) throws SAXException {
             parent = p;
@@ -3665,6 +3673,7 @@ abstract public class ToStream extends SerializerBase
         
         protected Writer restore() {
             parent.m_writer = main;
+            closeable = true;
             return parent.m_writer;
         }
         
@@ -3684,7 +3693,9 @@ abstract public class ToStream extends SerializerBase
 
         @Override
         public void close() throws IOException {
-            throw new IOException("Invalid state.");
+            if (!closeable) {
+                throw new IOException("Invalid state.");
+            }
         }
         
     }
