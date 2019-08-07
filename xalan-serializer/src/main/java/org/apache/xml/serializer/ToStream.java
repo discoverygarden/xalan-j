@@ -1617,6 +1617,7 @@ abstract public class ToStream extends SerializerBase
                             // We've hit the end of the buffer with only a high surrogate; an incomplete character.
                             // Stash it to deal with later.
                             new SurrogateWriter(this, ch);
+                            lastDirtyCharProcessed = i;
                         }
                     }
                     else if (Encodings.isLowUTF16Surrogate(ch)) {
