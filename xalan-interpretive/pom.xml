@@ -38,6 +38,12 @@
 			<artifactId>xalan-serializer</artifactId>
 			<version>${revision}</version>
 		</dependency>
+        <dependency>
+            <groupId>xml-apis</groupId>
+            <artifactId>xml-apis</artifactId>
+            <version>1.4.01</version>
+        </dependency>
+
         
         <!-- IncrementalSAXSource_Xerces depends on Xerces, but we've removed that 
 		<dependency>

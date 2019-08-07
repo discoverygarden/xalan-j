@@ -1456,7 +1456,7 @@ abstract public class ToStream extends SerializerBase
             final int end = start + length;
             int lastDirtyCharProcessed = start - 1; // last non-clean character that was processed
 													// that was processed
-            final Writer writer = m_writer;
+            Writer writer = m_writer;
             boolean isAllWhitespace = true;
 
             // process any leading whitspace
@@ -1600,28 +1600,49 @@ abstract public class ToStream extends SerializerBase
                         // just leave it get added on to the clean characters
                         
                     }
-                    else if (Encodings.isHighUTF16Surrogate(ch) && i < end-1 && Encodings.isLowUTF16Surrogate(chars[i+1])) {
-                    	// So, this is a (valid) surrogate pair
-                    	if (! m_encodingInfo.isInEncoding(ch, chars[i+1])) {
-                    		int codepoint = Encodings.toCodePoint(ch, chars[i+1]);
-                    		writeOutCleanChars(chars, i, lastDirtyCharProcessed);
-                    		writer.write("&#");
-                    		writer.write(Integer.toString(codepoint));
-                    		writer.write(';');
-                    		lastDirtyCharProcessed = i+1;
-                    	}
-                    	i++; // skip the low surrogate, too
+                    else if (Encodings.isHighUTF16Surrogate(ch)) {
+                        if (i < end-1 && Encodings.isLowUTF16Surrogate(chars[i+1])) {
+                        	// So, this is a (valid) surrogate pair
+                        	if (! m_encodingInfo.isInEncoding(ch, chars[i+1])) {
+                        		int codepoint = Encodings.toCodePoint(ch, chars[i+1]);
+                        		writeOutCleanChars(chars, i, lastDirtyCharProcessed);
+                        		writer.write("&#");
+                        		writer.write(Integer.toString(codepoint));
+                        		writer.write(';');
+                        		lastDirtyCharProcessed = i+1;
+                        	}
+                        	i++; // skip the low surrogate, too
+                        }
+                        else {
+                            // We've hit the end of the buffer with only a high surrogate; an incomplete character.
+                            // Stash it to deal with later.
+                            writer = new SurrogateWriter(this, ch);
+                            lastDirtyCharProcessed = i;
+                        }
+                    }
+                    else if (Encodings.isLowUTF16Surrogate(ch)) {
+                        if (writer instanceof SurrogateWriter) {
+                            final SurrogateWriter sw = ((SurrogateWriter) writer);
+                            final char high = sw.getUpper();
+                            writer = sw.restore();
+                            if (! m_encodingInfo.isInEncoding(high, ch)) {
+                                int codepoint = Encodings.toCodePoint(high, ch);
+                                writeOutCleanChars(chars, i, lastDirtyCharProcessed);
+                                writer.write("&#");
+                                writer.write(Integer.toString(codepoint));
+                                writer.write(';');
+                                lastDirtyCharProcessed = i;
+                            }
+                        }
+                        else {
+                            throw new SAXException(String.format("Encounterd low UTF-16 surrogate without a high: %i", ch));
+                        }
                     }
                 	else {
                         // This is a fallback plan, we get here if the
-                    	// encoding doesn't contain ch and it's not part
-                    	// of a surrogate pair
-                        // The right thing is to write out an entity
-                        writeOutCleanChars(chars, i, lastDirtyCharProcessed);
-                        writer.write("&#");
-                        writer.write(Integer.toString(ch));
-                        writer.write(';');
-                        lastDirtyCharProcessed = i;
+                        // encoding doesn't contain ch and it's not part
+                        // of a surrogate pair; therefore, it's invalid.
+                	    throw new SAXException(String.format("Invalid codepoint: %i", ch));
                     }
                 }
             }
@@ -3263,6 +3284,10 @@ abstract public class ToStream extends SerializerBase
     public boolean reset()
     {
         boolean wasReset = false;
+        
+        if (m_writer instanceof SurrogateWriter) {
+            ((SurrogateWriter) m_writer).restore();
+        }
         if (super.reset())
         {
             resetToStream();
@@ -3613,5 +3638,50 @@ abstract public class ToStream extends SerializerBase
             m_StringOfCDATASections = URI_and_localNames;
         else
             m_StringOfCDATASections += (" " + URI_and_localNames);
+    }
+    
+    /**
+     * Allow UTF-16 astral characters split across buffers to be written.
+     * @author adam@discoverygarden.ca
+     */
+    private class SurrogateWriter extends java.io.Writer {
+        protected Writer main;
+        protected ToStream parent;
+        protected char high;
+        
+        public SurrogateWriter(ToStream p, char high) throws SAXException {
+            parent = p;
+            if (parent.m_writer instanceof SurrogateWriter) {
+                throw new SAXException("Encountered another UTF-16 high surrogate when we already have one.");
+            }
+            main = parent.m_writer;
+            parent.m_writer = this;
+            this.high = high;
+        }
+        
+        protected Writer restore() {
+            parent.m_writer = main;
+            return parent.m_writer;
+        }
+        
+        protected char getUpper() {
+            return high;
+        }
+
+        @Override
+        public void write(char[] cbuf, int off, int len) throws IOException {
+           throw new IOException("Invalid state.");
+        }
+
+        @Override
+        public void flush() throws IOException {
+            throw new IOException("Invalid state.");
+        }
+
+        @Override
+        public void close() throws IOException {
+            throw new IOException("Invalid state.");
+        }
+        
     }
 }
