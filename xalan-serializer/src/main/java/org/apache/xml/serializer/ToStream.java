@@ -1594,12 +1594,7 @@ abstract public class ToStream extends SerializerBase
                         writer.write("&#8232;");
                         lastDirtyCharProcessed = i;
                     }
-                    else if (m_encodingInfo.isInEncoding(ch)) {
-                        // If the character is in the encoding, and
-                        // not in the normal ASCII range, we also
-                        // just leave it get added on to the clean characters
-                        
-                    }
+
                     else if (Encodings.isHighUTF16Surrogate(ch)) {
                         if (i < end-1 && Encodings.isLowUTF16Surrogate(chars[i+1])) {
                         	// So, this is a (valid) surrogate pair
@@ -1625,18 +1620,27 @@ abstract public class ToStream extends SerializerBase
                             final SurrogateWriter sw = ((SurrogateWriter) writer);
                             final char high = sw.getUpper();
                             writer = sw.restore();
-                            if (! m_encodingInfo.isInEncoding(high, ch)) {
+                            writeOutCleanChars(chars, i, lastDirtyCharProcessed);
+                            
+                            if (m_encodingInfo.isInEncoding(high, ch)) {
+                                writer.write(new char[] {high, ch});
+                            } else {
                                 int codepoint = Encodings.toCodePoint(high, ch);
-                                writeOutCleanChars(chars, i, lastDirtyCharProcessed);
                                 writer.write("&#");
                                 writer.write(Integer.toString(codepoint));
-                                writer.write(';');
-                                lastDirtyCharProcessed = i;
+                                writer.write(';');   
                             }
+                            lastDirtyCharProcessed = i;
                         }
                         else {
                             throw new SAXException(String.format("Encountered low UTF-16 surrogate without a high: %c", ch));
                         }
+                    }
+                    else if (m_encodingInfo.isInEncoding(ch)) {
+                        // If the character is in the encoding, and
+                        // not in the normal ASCII range, we also
+                        // just leave it get added on to the clean characters
+                        
                     }
                 	else {
                         // This is a fallback plan, we get here if the
