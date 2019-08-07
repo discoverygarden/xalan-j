@@ -1624,7 +1624,7 @@ abstract public class ToStream extends SerializerBase
                         if (writer instanceof SurrogateWriter) {
                             final SurrogateWriter sw = ((SurrogateWriter) writer);
                             final char high = sw.getUpper();
-                            sw.restore();
+                            writer = sw.restore();
                             if (! m_encodingInfo.isInEncoding(high, ch)) {
                                 int codepoint = Encodings.toCodePoint(high, ch);
                                 writeOutCleanChars(chars, i, lastDirtyCharProcessed);
@@ -3659,8 +3659,9 @@ abstract public class ToStream extends SerializerBase
             this.high = high;
         }
         
-        protected void restore() {
+        protected Writer restore() {
             parent.m_writer = main;
+            return parent.m_writer;
         }
         
         protected char getUpper() {
