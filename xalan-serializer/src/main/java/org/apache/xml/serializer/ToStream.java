@@ -1456,7 +1456,7 @@ abstract public class ToStream extends SerializerBase
             final int end = start + length;
             int lastDirtyCharProcessed = start - 1; // last non-clean character that was processed
 													// that was processed
-            final Writer writer = m_writer;
+            Writer writer = m_writer;
             boolean isAllWhitespace = true;
 
             // process any leading whitspace
@@ -1616,7 +1616,7 @@ abstract public class ToStream extends SerializerBase
                         else {
                             // We've hit the end of the buffer with only a high surrogate; an incomplete character.
                             // Stash it to deal with later.
-                            new SurrogateWriter(this, ch);
+                            writer = new SurrogateWriter(this, ch);
                             lastDirtyCharProcessed = i;
                         }
                     }
@@ -3649,8 +3649,11 @@ abstract public class ToStream extends SerializerBase
         protected ToStream parent;
         protected char high;
         
-        public SurrogateWriter(ToStream p, char high) {
+        public SurrogateWriter(ToStream p, char high) throws SAXException {
             parent = p;
+            if (parent.m_writer instanceof SurrogateWriter) {
+                throw new SAXException("Encountered another UTF-16 high surrogate when we already have one.");
+            }
             main = parent.m_writer;
             parent.m_writer = this;
             this.high = high;
