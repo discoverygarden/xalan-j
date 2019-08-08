@@ -1594,12 +1594,7 @@ abstract public class ToStream extends SerializerBase
                         writer.write("&#8232;");
                         lastDirtyCharProcessed = i;
                     }
-                    else if (m_encodingInfo.isInEncoding(ch)) {
-                        // If the character is in the encoding, and
-                        // not in the normal ASCII range, we also
-                        // just leave it get added on to the clean characters
-                        
-                    }
+
                     else if (Encodings.isHighUTF16Surrogate(ch)) {
                         if (i < end-1 && Encodings.isLowUTF16Surrogate(chars[i+1])) {
                         	// So, this is a (valid) surrogate pair
@@ -1615,7 +1610,8 @@ abstract public class ToStream extends SerializerBase
                         }
                         else {
                             // We've hit the end of the buffer with only a high surrogate; an incomplete character.
-                            // Stash it to deal with later.
+                            // Dump things out and stash it to deal with later.
+                            writeOutCleanChars(chars, i, lastDirtyCharProcessed);
                             writer = new SurrogateWriter(this, ch);
                             lastDirtyCharProcessed = i;
                         }
@@ -1624,25 +1620,40 @@ abstract public class ToStream extends SerializerBase
                         if (writer instanceof SurrogateWriter) {
                             final SurrogateWriter sw = ((SurrogateWriter) writer);
                             final char high = sw.getUpper();
-                            writer = sw.restore();
-                            if (! m_encodingInfo.isInEncoding(high, ch)) {
+                            
+                            // XXX: Complains about a resource leak if we don't close it via the same variable.
+                            final Writer to_restore = sw.restore();
+                            writer.close();
+                            
+                            writer = to_restore;
+                            
+                            writeOutCleanChars(chars, i, lastDirtyCharProcessed);
+                            
+                            if (m_encodingInfo.isInEncoding(high, ch)) {
+                                writer.write(new char[] {high, ch});
+                            } else {
                                 int codepoint = Encodings.toCodePoint(high, ch);
-                                writeOutCleanChars(chars, i, lastDirtyCharProcessed);
                                 writer.write("&#");
                                 writer.write(Integer.toString(codepoint));
-                                writer.write(';');
-                                lastDirtyCharProcessed = i;
+                                writer.write(';');   
                             }
+                            lastDirtyCharProcessed = i;
                         }
                         else {
-                            throw new SAXException(String.format("Encounterd low UTF-16 surrogate without a high: %i", ch));
+                            throw new SAXException(String.format("Encountered low UTF-16 surrogate without a high: %c", ch));
                         }
+                    }
+                    else if (m_encodingInfo.isInEncoding(ch)) {
+                        // If the character is in the encoding, and
+                        // not in the normal ASCII range, we also
+                        // just leave it get added on to the clean characters
+                        
                     }
                 	else {
                         // This is a fallback plan, we get here if the
                         // encoding doesn't contain ch and it's not part
                         // of a surrogate pair; therefore, it's invalid.
-                	    throw new SAXException(String.format("Invalid codepoint: %i", ch));
+                	    throw new SAXException(String.format("Invalid codepoint: %c", ch));
                     }
                 }
             }
@@ -3648,6 +3659,7 @@ abstract public class ToStream extends SerializerBase
         protected Writer main;
         protected ToStream parent;
         protected char high;
+        protected boolean closeable = false;
         
         public SurrogateWriter(ToStream p, char high) throws SAXException {
             parent = p;
@@ -3661,6 +3673,7 @@ abstract public class ToStream extends SerializerBase
         
         protected Writer restore() {
             parent.m_writer = main;
+            closeable = true;
             return parent.m_writer;
         }
         
@@ -3680,7 +3693,9 @@ abstract public class ToStream extends SerializerBase
 
         @Override
         public void close() throws IOException {
-            throw new IOException("Invalid state.");
+            if (!closeable) {
+                throw new IOException("Invalid state.");
+            }
         }
         
     }
